@@ -160,7 +160,8 @@ func (conn *Connection) Sudo(cmd string, opts ...SudoOptions) (stdoutByte []byte
 		opt.SudoPattern = "[sudo] password: "
 	}
 
-	cmd = fmt.Sprintf("sudo -S -p '%s' -H -u %s /bin/bash -l -c \"cd; %s\"", opt.SudoPattern, opt.SudoUser, cmd)
+	// cmd = fmt.Sprintf("sudo -S -p '%s' -H -u %s /bin/bash -l -c \"cd; %s\"", opt.SudoPattern, opt.SudoUser, cmd)
+	cmd = fmt.Sprintf("sudo -S -p '%s' -H -u %s /bin/bash -c \"cd; %s\"", opt.SudoPattern, opt.SudoUser, cmd)
 	watcher := Watcher{Pattern: opt.SudoPattern, Response: opt.SudoPassword}
 	opt.Watchers = append(opt.Watchers, watcher)
 
