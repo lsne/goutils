@@ -8,13 +8,13 @@ import (
 )
 
 func TestNewConnection(t *testing.T) {
-	conn, err := NewConnection("192.168.1.1", "username", "password", 22, 10)
+	conn, err := NewConnection("192.168.0.1", 22, "username", "password", "", 10)
 	if err != nil {
 		fmt.Println("连接失败 ", err)
 		return
 	}
 
-	// conn, err := NewConnectionUseKeyFile("192.168.1.1", "username", "/home/username/.ssh/id_rsa", 22, 10)
+	// conn, err := NewConnectionUseKeyFile("192.168.0.1", "username", "/home/username/.ssh/id_rsa", 22, 10)
 	// if err != nil {
 	// 	fmt.Println("连接失败 ", err)
 	// 	return
