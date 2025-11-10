@@ -13,13 +13,7 @@ import (
 // 判断文件是否存在
 func IsExists(path string) bool {
 	_, err := os.Stat(path)
-	if err != nil {
-		if os.IsExist(err) {
-			return true
-		}
-		return false
-	}
-	return true
+	return err == nil
 }
 
 // 判断所给路径是否为目录, 是否为文件可以用 !IsDir

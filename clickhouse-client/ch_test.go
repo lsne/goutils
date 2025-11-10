@@ -3,11 +3,10 @@
  * @Date: 2024-09-05 10:34:12
  */
 
-package main
+package ch
 
 import (
 	"fmt"
-	"testgo/testclickhouse/ch"
 )
 
 func main() {
@@ -23,7 +22,7 @@ func main() {
 	password := "123456"
 	database := "db01"
 
-	conn, err := ch.NewChConn(nodes, username, password, database)
+	conn, err := NewChConn(nodes, username, password, database)
 	if err != nil {
 		fmt.Println(err)
 		panic("创建连接失败")
@@ -34,8 +33,8 @@ func main() {
 	// 插入数据
 	sql := "INSERT INTO t1_all (content, count) VALUES (?, ?)"
 	if _, err := conn.Exec(sql, "test1", 1); err != nil {
-		fmt.Printf("insert %s row %d faild!\n", table, i)
+		fmt.Printf("insert row faild!\n")
 	} else {
-		fmt.Printf("insert %s row %d success!\n", table, i)
+		fmt.Printf("insert row success!\n")
 	}
 }

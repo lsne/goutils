@@ -9,7 +9,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"os"
 	"path"
@@ -39,50 +38,40 @@ type Connection struct {
 	User         string
 	Password     string
 	KeyFile      string
+	Timeout      int64
 	auth         []ssh.AuthMethod
 	clientConfig *ssh.ClientConfig
 	sshClient    *ssh.Client
 	*sftp.Client
 }
 
-func NewConnection(host, user, password string, port int, timeout int64) (*Connection, error) {
+func NewConnection(host string, port int, user string, password string, keyfile string, timeout int64) (*Connection, error) {
 	var err error
-	conn := &Connection{Host: host, Port: port, User: user, Password: password}
-	conn.auth = make([]ssh.AuthMethod, 0)
-	conn.auth = append(conn.auth, ssh.Password(password))
-	conn.clientConfig = &ssh.ClientConfig{
-		User:            user,
-		Auth:            conn.auth,
-		HostKeyCallback: ssh.HostKeyCallback(func(hostname string, remote net.Addr, key ssh.PublicKey) error { return nil }),
-		Timeout:         time.Duration(timeout) * time.Second,
-	}
+	conn := &Connection{Host: host, Port: port, User: user, Password: password, KeyFile: keyfile, Timeout: timeout}
 
-	address := fmt.Sprintf("%s:%d", conn.Host, conn.Port)
-
-	if conn.sshClient, err = ssh.Dial("tcp", address, conn.clientConfig); err != nil {
-		return nil, err
-	}
-
-	if conn.Client, err = sftp.NewClient(conn.sshClient); err != nil {
-		return nil, err
-	}
-
-	return conn, nil
-}
-
-func NewConnectionUseKeyFile(host, user, keyfile string, port int, timeout int64) (*Connection, error) {
-	conn := &Connection{Host: host, Port: port, User: user, KeyFile: keyfile}
-	key, err := ioutil.ReadFile(keyfile)
-	if err != nil {
-		return nil, err
-	}
-	signer, err := ssh.ParsePrivateKey(key)
-	if err != nil {
-		return nil, err
+	if conn.Port == 0 {
+		conn.Port = 22
 	}
 
 	conn.auth = make([]ssh.AuthMethod, 0)
-	conn.auth = append(conn.auth, ssh.PublicKeys(signer))
+
+	if password != "" {
+		auth := ssh.Password(password)
+		conn.auth = append(conn.auth, auth)
+	}
+
+	if keyfile != "" {
+		key, err := os.ReadFile(keyfile)
+		if err != nil {
+			return nil, err
+		}
+		signer, err := ssh.ParsePrivateKey(key)
+		if err != nil {
+			return nil, err
+		}
+		conn.auth = append(conn.auth, ssh.PublicKeys(signer))
+	}
+
 	conn.clientConfig = &ssh.ClientConfig{
 		User:            user,
 		Auth:            conn.auth,
@@ -275,13 +264,7 @@ func (conn *Connection) Copy(source, target string) error {
 
 func (conn *Connection) IsExists(path string) bool {
 	_, err := conn.Stat(path)
-	if err != nil {
-		if os.IsExist(err) {
-			return true
-		}
-		return false
-	}
-	return true
+	return err == nil
 }
 
 func (conn *Connection) IsDir(path string) bool {
