@@ -177,13 +177,13 @@ func (conn *Connection) Scp(source, target string) error {
 	target = filepath.ToSlash(target)
 
 	if source == "" {
-		return fmt.Errorf("源文件不能为空\n")
+		return fmt.Errorf("源文件不能为空")
 	}
 	if target == "" {
-		return fmt.Errorf("目标路径不能为空\n")
+		return fmt.Errorf("目标路径不能为空")
 	}
 	if !utils.IsExists(source) {
-		return fmt.Errorf("文件 %s 不存在\n", source)
+		return fmt.Errorf("文件 %s 不存在", source)
 	}
 
 	if !utils.IsDir(source) {
@@ -198,7 +198,7 @@ func (conn *Connection) Scp(source, target string) error {
 	}
 
 	if !conn.IsDir(target) {
-		return fmt.Errorf("远程已经存在同名文件: %s\n", target)
+		return fmt.Errorf("远程已经存在同名文件: %s", target)
 	}
 
 	target = filepath.ToSlash(path.Join(target, path.Base(filepath.ToSlash(source))))
