@@ -8,6 +8,7 @@ require (
 	github.com/pkg/sftp v1.13.9
 	github.com/robfig/cron/v3 v3.0.1
 	golang.org/x/crypto v0.41.0
+	golang.org/x/text v0.28.0
 )
 
 require (
