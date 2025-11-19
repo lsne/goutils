@@ -34,7 +34,7 @@ type SudoOptions struct {
 
 type Connection struct {
 	Host         string
-	Port         int
+	Port         uint16
 	User         string
 	Password     string
 	KeyFile      string
@@ -45,7 +45,7 @@ type Connection struct {
 	*sftp.Client
 }
 
-func NewConnection(host string, port int, user string, password string, keyfile string, timeout int64) (*Connection, error) {
+func NewConnection(host string, port uint16, user string, password string, keyfile string, timeout int64) (*Connection, error) {
 	var err error
 	conn := &Connection{Host: host, Port: port, User: user, Password: password, KeyFile: keyfile, Timeout: timeout}
 
@@ -168,11 +168,12 @@ func (conn *Connection) Sudo(cmd string, opts ...SudoOptions) (stdoutByte []byte
 	return conn.Run(cmd, RunOptions{Watchers: opt.Watchers})
 }
 
+// Scp 实现本地文件/目录上传到远程服务器
+// 如果source是文件, target是文件, 直接调用copy
+// 如果source是文件, target是目录, target 需要加文件名: path.Join(target, path.Base(source))
+// 如果source是目录, target是文件, 报错,目标不是一个路径
+// 如果source是目录, target是目录, 直接遍历copy, 如果target不存在,则自动创建。 如果存在,则创建下一级与 path.Join(target, path.Base(source)) 同名的目录(如果存在, 则报错)
 func (conn *Connection) Scp(source, target string) error {
-	// 如果source是文件, target是文件, 直接调用copy
-	// 如果source是文件, target是目录, target 需要加文件名: path.Join(target, path.Base(source))
-	// 如果source是目录, target是文件, 报错,目标不是一个路径
-	// 如果source是目录, target是目录, 直接遍历copy, 如果target不存在,则自动创建。 如果存在,则创建下一级与 path.Join(target, path.Base(source)) 同名的目录(如果存在, 则报错)
 
 	// 通过ssh协议传输文件的目标机器全都是linux系统, 所以将目标路径强制转换为Linux格式
 	target = filepath.ToSlash(target)
