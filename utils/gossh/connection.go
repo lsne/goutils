@@ -8,6 +8,9 @@ package gossh
 import (
 	"bufio"
 	"bytes"
+	"dbup/internal/utils/fileutil"
+	"dbup/internal/utils/gocmd"
+	"dbup/internal/utils/strutil"
 	"fmt"
 	"io"
 	"net"
@@ -19,10 +22,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lsne/goutils/utils/fileutil"
-	"github.com/lsne/goutils/utils/gocmd"
-	"github.com/lsne/goutils/utils/strutil"
-
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
 )
@@ -30,15 +29,57 @@ import (
 const GOSSH_ERR_FORMAT = "在机器: %s 上, 执行(%s)失败: %v, 标准输出: %s, 标准错误: %s"
 
 type RunOptions struct {
-	Watchers []Watcher
-}
-
-type SudoOptions struct {
-	SudoUser     string
-	SudoPassword string
-	SudoPattern  string
+	hide         bool
+	sudoUser     string
+	sudoPassword string
+	sudoPattern  string
 	Watchers     []Watcher
 }
+
+// Option 是一个函数类型，用于修改 RunOptions
+type Option func(*RunOptions)
+
+// WithHide 返回一个 Option，用于设置 hide
+func WithHide(hide bool) Option {
+	return func(o *RunOptions) {
+		o.hide = hide
+	}
+}
+
+// WithWatchers 返回一个 Option，用于设置 Watchers
+func WithWatchers(watchers ...Watcher) Option {
+	return func(o *RunOptions) {
+		o.Watchers = append(o.Watchers, watchers...)
+	}
+}
+
+// WithSudoUser 只用于 sudo 函数
+func WithSudoUser(user string) Option {
+	return func(o *RunOptions) {
+		o.sudoUser = user
+	}
+}
+
+// WithSudoPassword 只用于 sudo 函数
+func WithSudoPassword(password string) Option {
+	return func(o *RunOptions) {
+		o.sudoPassword = password
+	}
+}
+
+// WithSudoPattern 只用于 sudo 函数
+func WithSudoPattern(pattern string) Option {
+	return func(o *RunOptions) {
+		o.sudoPattern = pattern
+	}
+}
+
+//type SudoOptions struct {
+//	SudoUser     string
+//	SudoPassword string
+//	SudoPattern  string
+//	Watchers     []Watcher
+//}
 
 type Connection struct {
 	Host         string
@@ -100,14 +141,18 @@ func NewConnection(host string, port uint16, user string, password string, keyfi
 	return conn, nil
 }
 
-func (conn *Connection) Run(cmd string, opts ...RunOptions) (stdoutByte []byte, stderrByte []byte, err error) {
-	var opt RunOptions
+func (conn *Connection) Run(cmd string, opts ...Option) (stdoutByte []byte, stderrByte []byte, err error) {
 	var stdin io.WriteCloser
+	var stdouts io.Reader
 	var stdout io.Reader
 	var stderr = new(bytes.Buffer)
 
-	if len(opts) >= 1 {
-		opt = opts[0]
+	options := &RunOptions{
+		hide: false, // 默认显示输出
+	}
+
+	for _, opt := range opts {
+		opt(options)
 	}
 
 	cmd = fmt.Sprintf("PATH=$PATH:/usr/bin:/usr/sbin %s", cmd)
@@ -134,45 +179,52 @@ func (conn *Connection) Run(cmd string, opts ...RunOptions) (stdoutByte []byte, 
 	}
 	session.Stderr = stderr
 
+	// 👇 关键：用 TeeReader 同时写入 os.Stdout 和供 watchers 读取
+	if !options.hide {
+		stdouts = io.TeeReader(stdout, os.Stdout) // 实时输出到终端！
+	} else {
+		stdouts = stdout
+	}
+
 	var wg sync.WaitGroup
-	wg.Add(1)
-
-	go func() {
-		defer wg.Done()
-		watchers(stdin, stdout, &stdoutByte, opt.Watchers)
-	}()
-
+	wg.Go(func() {
+		watchers(stdin, stdouts, &stdoutByte, options.Watchers)
+	})
 	err = session.Run(cmd)
 	wg.Wait()
+
 	if err != nil {
 		return stdoutByte, stderr.Bytes(), err
 	}
 	return stdoutByte, stderr.Bytes(), nil
 }
 
-func (conn *Connection) Sudo(cmd string, opts ...SudoOptions) (stdoutByte []byte, stderrByte []byte, err error) {
-	var opt SudoOptions
-	if len(opts) >= 1 {
-		opt = opts[0]
+func (conn *Connection) Sudo(cmd string, opts ...Option) (stdoutByte []byte, stderrByte []byte, err error) {
+	options := &RunOptions{
+		hide: false, // 默认显示输出
 	}
 
-	if opt.SudoUser == "" {
-		opt.SudoUser = "root"
+	for _, opt := range opts {
+		opt(options)
 	}
 
-	if opt.SudoPassword == "" {
-		opt.SudoPassword = conn.Password
+	if options.sudoUser == "" {
+		options.sudoUser = "root"
 	}
 
-	if opt.SudoPattern == "" {
-		opt.SudoPattern = "[sudo] password: "
+	if options.sudoPassword == "" {
+		options.sudoPassword = conn.Password
 	}
 
-	cmd = fmt.Sprintf("sudo -S -p '%s' -H -u %s /bin/bash -c \"cd; %s\"", opt.SudoPattern, opt.SudoUser, cmd)
-	watcher := Watcher{Pattern: opt.SudoPattern, Response: opt.SudoPassword}
-	opt.Watchers = append(opt.Watchers, watcher)
+	if options.sudoPattern == "" {
+		options.sudoPattern = "[sudo] password: "
+	}
 
-	return conn.Run(cmd, RunOptions{Watchers: opt.Watchers})
+	cmd = fmt.Sprintf("sudo -S -p '%s' -H -u %s /bin/bash -c \"cd; %s\"", options.sudoPattern, options.sudoUser, cmd)
+	watcher := Watcher{Pattern: options.sudoPattern, Response: options.sudoPassword}
+	options.Watchers = append(options.Watchers, watcher)
+
+	return conn.Run(cmd, WithHide(options.hide), WithWatchers(options.Watchers...))
 }
 
 // Scp 实现本地文件/目录上传到远程服务器
@@ -318,7 +370,7 @@ func (conn *Connection) ClearDir(dir string) error {
 	if dir == "" {
 		return nil
 	}
-	if slices.Contains(gocmd.SystemDirs, strings.TrimSpace(dir)) {
+	if slices.Contains(gocmd.SystemDirs, strings.TrimSuffix(strings.TrimSpace(dir), "/")) {
 		return fmt.Errorf("目录(%s)是系统目录， 不允许删除", dir)
 	}
 
@@ -337,7 +389,7 @@ func (conn *Connection) ClearDir(dir string) error {
 func (conn *Connection) Hostsanalysis(hostnamelist []string) error {
 	file, err := conn.Open("/etc/hosts")
 	if err != nil {
-		return fmt.Errorf("无法打开/etc/hosts文件：%v ", err)
+		return fmt.Errorf("无法打开/etc/hosts文件: %v ", err)
 	}
 	defer file.Close()
 
