@@ -6,11 +6,7 @@
 package gossh
 
 import (
-	"bufio"
 	"bytes"
-	"dbup/internal/utils/fileutil"
-	"dbup/internal/utils/gocmd"
-	"dbup/internal/utils/strutil"
 	"fmt"
 	"io"
 	"net"
@@ -21,6 +17,10 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/lsne/goutils/utils/fileutil"
+	"github.com/lsne/goutils/utils/gocmd"
+	"github.com/lsne/goutils/utils/strutil"
 
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
@@ -384,59 +384,4 @@ func (conn *Connection) ClearDir(dir string) error {
 	}
 
 	return nil
-}
-
-func (conn *Connection) Hostsanalysis(hostnamelist []string) error {
-	file, err := conn.Open("/etc/hosts")
-	if err != nil {
-		return fmt.Errorf("无法打开/etc/hosts文件: %v ", err)
-	}
-	defer file.Close()
-
-	// 创建一个Scanner来逐行读取文件内容
-	scanner := bufio.NewScanner(file)
-	hlist := []string{}
-	// 逐行检查域名解析
-	for scanner.Scan() {
-		line := scanner.Text()
-		// 跳过注释行和空行
-		if len(line) == 0 || line[0] == '#' {
-			continue
-		}
-
-		fields := strings.Fields(line)
-		if len(fields) != 2 {
-			continue // 跳过无效行
-		}
-		ip := fields[0]
-		hostname := fields[1]
-		hlist = append(hlist, hostname)
-		addrs, err := net.LookupHost(hostname)
-		if err != nil {
-			fmt.Printf("无法解析域名 %s: %v\n", hostname, err)
-			continue
-		}
-
-		if !conn.Contains(addrs, ip) {
-			return fmt.Errorf("域名 %s 解析到的IP地址与期望的地址 %s 不一致", hostname, ip)
-		}
-	}
-
-	for _, hn := range hostnamelist {
-		if hn != "" {
-			if !conn.Contains(hlist, hn) {
-				return fmt.Errorf("域名 %s 在主机 %s 的 /etc/hosts 文件未配置解析", hn, conn.Host)
-			}
-		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		return fmt.Errorf("读取 /etc/hosts 文件时发生错误: %v", err)
-	}
-
-	return nil
-}
-
-func (conn *Connection) Contains(addrs []string, ip string) bool {
-	panic("unimplemented")
 }
