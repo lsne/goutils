@@ -163,7 +163,8 @@ func (conn *Connection) Run(cmd string, opts ...Option) (stdoutByte []byte, stde
 	defer session.Close()
 
 	modes := ssh.TerminalModes{
-		ssh.ECHO:          0,      // disable echoing
+	        ssh.ONLCR:         0,      // 含义：禁用换行符转换
+		ssh.ECHO:          0,      // disable echoing, 含义：禁用输入回显
 		ssh.TTY_OP_ISPEED: 144000, // input speed = 14.4kbaud
 		ssh.TTY_OP_OSPEED: 144000, // output speed = 14.4kbaud
 	}
